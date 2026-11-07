@@ -24,6 +24,7 @@ button:disabled{opacity:.6}
 #fim{display:none;text-align:center;background:#fff;border-radius:12px;padding:30px 18px;border:1px solid var(--bd)}
 #fim h2{color:var(--navy)}.err{color:#c0392b;font-size:14px;margin-top:8px;text-align:center}
 .logos{display:flex;gap:8px;justify-content:center;margin:18px 0 0}.logos img{height:44px;background:#fff;border-radius:6px;padding:3px}
+.blist{border:1px solid var(--bd);border-radius:8px;margin-top:6px;max-height:300px;overflow:auto}.blist:empty{display:none}.bi{padding:11px 12px;border-bottom:1px solid var(--bd);font-size:15px;cursor:pointer}.bi:last-child{border:0;color:var(--gray);font-style:italic}.bi:hover{background:#eef7f7}.bsel{padding:12px;background:#eef7f7;border-radius:8px;font-size:15px}.bsel a{color:var(--teal);margin-left:8px}
 </style>
 </head>
 <body>
@@ -44,19 +45,22 @@ const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ"; // pública: só permite ENVIAR
 // Sintomas na ordem da página de Hepatite B do Ministério da Saúde (gov.br/saude)
 const SINTOMAS = ["Cansaço","Tontura","Enjoo e/ou vômitos","Febre","Dor abdominal","Urina escura e fezes claras","Pele e olhos amarelados"];
-const SNI = ["Sim","Não","Prefiro não responder"];
+const SNI = ["Sim","Não"];
+// Bairros oficiais de Araraquara (lista dos Correios)
+const BAIRROS = ["1° Distrito Industrial (Albert Geoges Karam)", "2° Distrito Industrial (Domingos Ferrari)", "3° Distrito Industrial (Virgílio Ometto Pavan)", "5º Distrito Industrial", "7º Distrito Industrial (Antonio Zanin)", "8º Distrito Industrial", "10º Distrito Industrial José Cutrale Junior", "Altos do Jaraguá", "Área Rural de Araraquara", "Campos Ville", "Central Park Morada do Sol", "Centro", "Centro Empresarial e Industrial Omar Maksoud", "Chácara Bela Vista do Chibarro", "Chácara Flora Araraquara", "Chácara Velosa", "Chácaras do Trevo", "Cidade Jardim", "Cociza", "Condomínio Buona Vita", "Condomínio Manoela", "Condomínio Parque dos Sabiás", "Condomínio Portal das Tipuanas", "Condomínio Quinta das Tipuanas", "Condomínio Satélite", "Condomínio Vale das Rosas II", "Conjunto Habitacional Victório de Santi", "Doutor Tancredo de Almeida Neves", "Estrela e Kanashiro", "Fonte Luminosa", "Jardim Aclimação", "Jardim Adalberto Frederico de Oliveira Roxo I", "Jardim Adalgisa", "Jardim Águas do Paiol", "Jardim Almeida", "Jardim Altos de Pinheiros I e II", "Jardim Altos de Pinheiros III", "Jardim Altos do Cecap I e II", "Jardim América (Vila Xavier)", "Jardim Ana Adelaide", "Jardim Arangá", "Jardim Araraquara", "Jardim Arco-Íris", "Jardim Ártico", "Jardim Athenas", "Jardim Bandeirantes", "Jardim Biagioni", "Jardim Boa Vista", "Jardim Boa Vista II", "Jardim Boa Vista III", "Jardim Botânico", "Jardim Bounganville", "Jardim Brasil (Vila Xavier)", "Jardim Brasília (Vila Xavier)", "Jardim Califórnia", "Jardim Celiamar", "Jardim Cristo Rei (Vila Xavier)", "Jardim Cruzeiro do Sul I", "Jardim Cruzeiro do Sul I e II", "Jardim Cruzeiro do Sul II", "Jardim das Acácias", "Jardim das Acácias II", "Jardim das Estações (Vila Xavier)", "Jardim das Flores", "Jardim das Gaivotas", "Jardim das Paineiras", "Jardim das Palmeiras", "Jardim das Roseiras", "Jardim Del Rei", "Jardim Diamante", "Jardim do Bosque", "Jardim do Carmo", "Jardim Dom Pedro I", "Jardim Domingos Sávio", "Jardim dos Flamboyants", "Jardim dos Industriários", "Jardim dos Ipês", "Jardim dos Manacás", "Jardim dos Oitis", "Jardim Dumont", "Jardim Eliana", "Jardim Esmeralda", "Jardim Esplanada", "Jardim Estância das Rosas", "Jardim Europa (Vila Xavier)", "Jardim Florença", "Jardim Floridiana (Vila Xavier)", "Jardim Gardênias", "Jardim Guanabara", "Jardim Higienópolis", "Jardim Imperador", "Jardim Imperador II", "Jardim Imperial", "Jardim Indaiá", "Jardim Jacarandá", "Jardim Magnólias", "Jardim Magnólias II", "Jardim Mangiacapra", "Jardim Maracanã", "Jardim Margarida", "Jardim Maria Luiza", "Jardim Maria Luiza II", "Jardim Maria Luiza III", "Jardim Maria Luiza IV", "Jardim Maria Luiza V", "Jardim Marialice", "Jardim Marivan", "Jardim Martinez", "Jardim Morada do Sol (Vila Xavier)", "Jardim Morumbi", "Jardim Nova América", "Jardim Nova Araraquara", "Jardim Nova Época", "Jardim Padre Anchieta", "Jardim Palmares", "Jardim Panorama", "Jardim Paulista", "Jardim Paulistano (Vila Xavier)", "Jardim Pinheiros (Vila Xavier)", "Jardim Pinheiros II", "Jardim Portugal", "Jardim Primavera", "Jardim Primor", "Jardim Quitandinha", "Jardim Quitandinha II", "Jardim Rafaela Amoroso Micelli", "Jardim Regina", "Jardim Residencial Água Branca", "Jardim Residencial Elvio Lupo", "Jardim Residencial Iedda", "Jardim Residencial Itália", "Jardim Residencial Lupo II", "Jardim Residencial Maggiore", "Jardim Residencial Paraíso", "Jardim Residencial Quinta dos Oitis", "Jardim Residencial Santa Mônica", "Jardim Residencial Silvestre", "Jardim Residencial Vale do Campo", "Jardim Roberto Selmi Dei", "Jardim Salto Grande", "Jardim Santa Adélia", "Jardim Santa Angelina", "Jardim Santa Clara (Vila Xavier)", "Jardim Santa Júlia (Vila Xavier)", "Jardim Santa Júlia II", "Jardim Santa Júlia III", "Jardim Santa Lúcia", "Jardim Santa Marta", "Jardim Santa Rita de Cássia", "Jardim Santa Rosa", "Jardim Santa Thereza", "Jardim Santo Antônio", "Jardim São Bento", "Jardim São Camilo", "Jardim São Camilo II", "Jardim São Francisco", "Jardim São Gabriel", "Jardim São Jorge", "Jardim São Rafael I", "Jardim São Rafael II", "Jardim Serra Azul", "Jardim Silvânia (Vila Xavier)", "Jardim Tabapuã (Vila Xavier)", "Jardim Tamoio", "Jardim Tangará", "Jardim Tinen", "Jardim Uirapuru", "Jardim Uirapuru II", "Jardim Universal", "Jardim Vale das Rosas", "Jardim Veneza", "Jardim Viaduto (Vila Xavier)", "Jardim Victório Antônio de Santi II", "Jardim Vitória", "Jardim Zavanella", "Machados", "Parque Alvorada", "Parque Atlanta", "Parque das Hortências", "Parque Gramado (Vila Xavier)", "Parque Gramado II", "Parque Igaçaba", "Parque Laranjeiras", "Parque Planalto", "Parque Residencial Damha", "Parque Residencial Iguatemi", "Parque Residencial Jardim do Valle", "Parque Residencial Laura Molina", "Parque Residencial Vale do Sol", "Parque Residencial Valle Verde", "Parque São Paulo (Vila Xavier)", "Parque Tropical", "Portal das Araucárias", "Portal das Laranjeiras", "Quinta do Salto Residence", "Recanto dos Nobres", "Recreio Campestre Idanorma", "Residencial Acapulco", "Residencial Alamedas", "Residencial Cambuy", "Residencial Campos de Piemonte", "Residencial Portal dos Oitis", "Residencial Ravena", "Residencial Santa Luzia", "Residencial Stephanie Merissa", "Residencial Village Damha", "Residencial Village Damha II", "Residencial Village Damha III", "São Geraldo", "Sesmaria Ouro", "Vila Aracoara", "Vila Bela Vista", "Vila Biagioni (Vila Xavier)", "Vila Cidade Industrial (Vila Xavier)", "Vila DER", "Vila do Servidor", "Vila Esperança (Vila Xavier)", "Vila Ferroviária", "Vila Flórida", "Vila Furlan", "Vila Gaspar (Vila Xavier)", "Vila Girassol", "Vila Guaianazes", "Vila Harmonia", "Vila Higia", "Vila Independência", "Vila João Godói", "Vila Joinville (Vila Xavier)", "Vila José Bonifácio", "Vila Kátia", "Vila Maria Helena", "Vila Melhado", "Vila Normanda", "Vila Nossa Senhora Aparecida", "Vila Nossa Senhora do Carmo", "Vila Oriente", "Vila Progresso", "Vila Renata (Vila Xavier)", "Vila Santa Maria (Vila Xavier)", "Vila Santa Marta", "Vila Santana", "Vila Sedenho", "Vila Standard", "Vila Suconasa", "Vila Tito de Carvalho (Vila Xavier)", "Vila Velosa", "Vila Vieira (Vila Xavier)", "Vila Xavier", "Vila Yamada", "Villa Dei Fiori Residencial", "Yolanda Opice"];
+const OUTRO = "Meu bairro não está na lista";
 // ===================== PERGUNTAS =====================
 // tipo: bairro | lista | unica | multipla  ·  campo: coluna no banco  ·  se: só aparece se outra pergunta tiver o valor
 const PERGUNTAS = [
- {campo:"bairro", tipo:"bairro", titulo:"Em qual bairro de Araraquara você mora?", obrig:true, dica:"Comece a digitar e escolha na lista"},
+ {campo:"bairro", tipo:"bairro", titulo:"Em qual bairro de Araraquara você mora?", obrig:true, dica:"Digite parte do nome (ex.: \"América\", \"Selmi\") e toque no bairro na lista"},
  {campo:"faixa", tipo:"lista", titulo:"Faixa etária", obrig:true, opcoes:["Menos de 18 anos","18 a 29 anos","30 a 39 anos","40 a 49 anos","50 a 59 anos","60 anos ou mais"]},
  {campo:"sexo", tipo:"unica", titulo:"Sexo", obrig:true, opcoes:["Feminino","Masculino","Prefiro não responder"]},
  {campo:"sexo_sem_protecao", tipo:"unica", titulo:"Já realizou sexo sem proteção?", obrig:true, opcoes:SNI},
  {campo:"seringa", tipo:"unica", titulo:"Já fez o uso de seringas compartilhadas?", obrig:true, opcoes:SNI},
  {campo:"objeto_cortante", tipo:"unica", titulo:"Já fez o uso de qualquer objeto cortante de maneira compartilhada?", dica:"Alicates de unha, escovas de dente ou lâminas de barbear", obrig:true, opcoes:SNI},
- {campo:"sintomas", tipo:"multipla", titulo:"Marque um ou mais sintomas que você apresentou", dica:"Pode marcar mais de uma opção", opcoes:[...SINTOMAS,"Nenhum desses"]},
+ {campo:"sintomas", tipo:"multipla", obrig:true, titulo:"Marque um ou mais sintomas que você apresentou", dica:"Pode marcar mais de uma opção", opcoes:[...SINTOMAS,"Nenhum desses"]},
  {campo:"contato", tipo:"unica", titulo:"Teve contato com alguém com algum dos sintomas citados anteriormente?", obrig:true, opcoes:["Sim","Não","Não sei"]},
- {campo:"sintomas_contato", tipo:"multipla", se:["contato","Sim"], titulo:"Se sim, quais sintomas essa pessoa apresentava?", dica:"Pode marcar mais de uma opção", opcoes:[...SINTOMAS,"Não sei"]},
+ {campo:"sintomas_contato", tipo:"multipla", obrig:true, se:["contato","Sim"], titulo:"Se sim, quais sintomas essa pessoa apresentava?", dica:"Pode marcar mais de uma opção", opcoes:[...SINTOMAS,"Não sei"]},
  {campo:"exame", tipo:"unica", titulo:"Já realizou algum exame de hepatite?", obrig:true, opcoes:["Sim","Não","Não sei"]},
  {campo:"vacina", tipo:"unica", titulo:"Sua carteira de vacinação está em dia?", obrig:true, opcoes:["Sim","Não","Não sei"]}
 ];
@@ -72,7 +76,7 @@ function pontuar(d){let p=0;
 const f=document.getElementById("f"),esc=s=>String(s).replace(/"/g,"&quot;");
 f.innerHTML=PERGUNTAS.map((p,i)=>{const r=p.obrig?' <span class="req">*</span>':'',h=p.dica?`<div class="h">${p.dica}</div>`:'',cl=p.se?' hidden':'';
  const ini=`<div class="q${cl}" id="q_${p.campo}"><span class="t">${p.titulo}${r}</span>${h}`;
- if(p.tipo==="bairro")return ini+`<input type="text" name="bairro" list="lb" maxlength="60" autocomplete="off" aria-label="${esc(p.titulo)}"><datalist id="lb"></datalist></div>`;
+ if(p.tipo==="bairro")return ini+`<input type="text" id="bb" placeholder="Buscar bairro…" autocomplete="off" aria-label="${esc(p.titulo)}"><input type="hidden" name="bairro" id="bv"><div id="bl" class="blist"></div><div id="bsel" class="bsel hidden"></div><input type="text" id="boutro" class="hidden" maxlength="60" placeholder="Escreva o nome do seu bairro" style="margin-top:8px"></div>`;
  if(p.tipo==="lista")return ini+`<select name="${p.campo}" aria-label="${esc(p.titulo)}"><option value="">Selecione</option>${p.opcoes.map(o=>`<option>${o}</option>`).join("")}</select></div>`;
  const t=p.tipo==="unica"?"radio":"checkbox";
  return ini+p.opcoes.map(o=>`<label class="op"><input type="${t}" name="${p.campo}" value="${esc(o)}">${o}</label>`).join("")+`</div>`;
@@ -84,19 +88,23 @@ f.addEventListener("change",ev=>{
  const x=ev.target;if(x.type==="checkbox"){const g=[...f.querySelectorAll(`input[name="${x.name}"]`)],excl=["Nenhum desses","Não sei"];
   if(x.checked&&excl.includes(x.value))g.forEach(c=>{if(c!==x)c.checked=false});else if(x.checked)g.forEach(c=>{if(excl.includes(c.value))c.checked=false})}
 });
-// lista de bairros de Araraquara (OpenStreetMap); se falhar, a pessoa digita livre
-(async()=>{try{let L=JSON.parse(localStorage.getItem("hm_bairros")||"null");
- if(!L){const q='[out:json][timeout:25];area["name"="Araraquara"]["admin_level"="8"]->.a;(node["place"~"suburb|neighbourhood|quarter"](area.a);way["place"~"suburb|neighbourhood|quarter"](area.a);relation["place"~"suburb|neighbourhood|quarter"](area.a););out tags;';
-  const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});
-  L=[...new Set((await r.json()).elements.map(e=>e.tags&&e.tags.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
-  try{localStorage.setItem("hm_bairros",JSON.stringify(L))}catch(e){}}
- document.getElementById("lb").innerHTML=L.map(n=>`<option value="${esc(n)}">`).join("")}catch(e){}})();
+// ----- busca de bairros -----
+const sa=t=>t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+const bb=document.getElementById("bb"),bl=document.getElementById("bl"),bv=document.getElementById("bv"),bsel=document.getElementById("bsel"),bo=document.getElementById("boutro");
+function escolhe(n){bv.value=n;bb.classList.add("hidden");bl.innerHTML="";bsel.classList.remove("hidden");bsel.innerHTML=`✔ <b>${n}</b> <a href="#" id="btroca">trocar</a>`;
+ bo.classList.toggle("hidden",n!==OUTRO);if(n===OUTRO)bo.focus();
+ document.getElementById("btroca").onclick=e=>{e.preventDefault();bv.value="";bo.value="";bo.classList.add("hidden");bsel.classList.add("hidden");bb.classList.remove("hidden");bb.value="";bb.focus()}}
+bb.oninput=()=>{const q=sa(bb.value.trim());if(q.length<2){bl.innerHTML="";return}
+ const r=BAIRROS.filter(n=>sa(n).includes(q)).slice(0,12);
+ bl.innerHTML=[...r,OUTRO].map(n=>`<div class="bi" data-n="${esc(n)}">${n}</div>`).join("")};
+bl.onclick=e=>{const d=e.target.closest(".bi");if(d)escolhe(d.dataset.n)};
 const norm=s=>s.trim().replace(/\s+/g," ").toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
 f.onsubmit=async ev=>{ev.preventDefault();const d={cidade:"Araraquara"},fd=new FormData(f),e=document.getElementById("e");
  for(const p of PERGUNTAS){if(p.se&&fd.get(p.se[0])!==p.se[1])continue;
   const v=p.tipo==="multipla"?fd.getAll(p.campo):(fd.get(p.campo)||"").trim();
   if(p.obrig&&(!v||!v.length)){e.textContent="Responda: "+p.titulo;document.getElementById("q_"+p.campo).scrollIntoView({behavior:"smooth",block:"center"});return}
-  d[p.campo]=p.tipo==="bairro"?norm(v):p.tipo==="multipla"?v.filter(x=>x!=="Nenhum desses"&&x!=="Não sei"):(v||null)}
+  if(p.tipo==="bairro"&&v===OUTRO&&bo.value.trim().length<2){e.textContent="Escreva o nome do seu bairro";bo.focus();return}
+  d[p.campo]=p.tipo==="bairro"?(v===OUTRO?"Outro: "+norm(bo.value):v):p.tipo==="multipla"?v.filter(x=>x!=="Nenhum desses"&&x!=="Não sei"):(v||null)}
  d.pontos=pontuar(d);
  const b=document.getElementById("b");b.disabled=true;b.textContent="Enviando…";e.textContent="";
  try{const r=await fetch(SUPABASE_URL+"/rest/v1/respostas",{method:"POST",headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(d)});
