@@ -42,12 +42,12 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
  <div class="card grid">
   <div><label>Período</label><select id="fp"><option value="0">Tudo</option><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></div>
   <div><label>Intensidade do mapa por</label><select id="fm"><option value="pontos">Pontuação de risco</option><option value="n">Nº de respostas</option><option value="sint">Nº de sintomas relatados</option></select></div>
-  <div><label>Mínimo de respostas para mostrar o bairro</label><select id="fmin"><option>1</option><option selected>3</option><option>5</option></select></div>
+  <div><label>Mínimo de respostas para mostrar o bairro</label><select id="fmin"><option selected>1</option><option>3</option><option>5</option></select></div>
  </div>
  <div class="grid" id="kpis"></div>
  <div class="lay" style="margin-top:14px">
   <div class="card"><h2>Mapa de focos — escala do azul (menos atenção) ao vermelho (mais atenção)</h2><div id="map"></div>
-   <p class="note">Clique num bairro para ver detalhes e as unidades de saúde mais próximas. Posição do bairro e unidades: OpenStreetMap.</p></div>
+   <p class="note" id="geoinfo"></p><p class="note">Clique num bairro para ver detalhes e as unidades de saúde mais próximas. Posição do bairro e unidades: OpenStreetMap.</p></div>
   <div class="card" id="painel"><h2>Bairro selecionado</h2><p class="note">Clique num bairro no mapa ou na tabela.</p></div>
  </div>
  <div class="card"><h2>Ranking de bairros</h2><table><thead><tr><th>Bairro</th><th>Respostas</th><th>Pontuação</th><th>Com sintomas</th><th>Vacina em dia</th><th>Unidade mais próxima</th></tr></thead><tbody id="rk"></tbody></table></div>
@@ -63,10 +63,10 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
 const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ";
 const CENTRO = [-21.7946, -48.1756];
-const VERSAO = "2026-11-07.2"; // o Claude muda isto a cada atualização do app
+const VERSAO = "2026-11-07.3"; // o Claude muda isto a cada atualização do app
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY), $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
+const naoAchou=new Set();let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
 
 $("bl").onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: $("em").value, password: $("pw").value });
   $("le").textContent = error ? "Falha no login: " + error.message : ""; if (!error) start(); };
@@ -82,12 +82,13 @@ async function carregaUnidades(){try{const c=JSON.parse(localStorage.getItem("hm
   try{localStorage.setItem("hm_unid",JSON.stringify({t:Date.now(),u:unidades}))}catch(e){}}catch(e){console.warn(e)}}
 async function locais(){if(osmPlaces)return osmPlaces;try{const el=await overpass('[out:json][timeout:25];'+AREA+'(node["place"~"suburb|neighbourhood|quarter"](area.a);way["place"~"suburb|neighbourhood|quarter"](area.a);relation["place"~"suburb|neighbourhood|quarter"](area.a););out center tags;');
  osmPlaces={};el.forEach(e=>{const n=e.tags?.name,la=e.lat??e.center?.lat,lo=e.lon??e.center?.lon;if(n&&la)osmPlaces[chave(n)]=[la,lo]})}catch(e){osmPlaces={}}return osmPlaces}
-const chave=s=>String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/^(jardim|jd\.?|vila|vl\.?|parque|pq\.?|residencial|res\.?|conjunto|cj\.?)\s+/,"").trim();
+const limpa=s=>String(s).replace(/^Outro:\s*/,"").replace(/\s*\(.*?\)\s*/g," ").trim();
+const chave=s=>limpa(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/^(jardim|jd\.?|vila|vl\.?|parque|pq\.?|residencial|res\.?|conjunto|cj\.?)\s+/,"").trim();
 async function geocodifica(nome){const p=await locais();if(p[chave(nome)])return p[chave(nome)];
- try{const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(nome+", Araraquara, SP, Brasil"));const j=await r.json();
+ try{const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(limpa(nome)+", Araraquara, SP, Brasil"));const j=await r.json();
   if(j.length){const la=+j[0].lat,lo=+j[0].lon;if(Math.abs(la-CENTRO[0])<.2&&Math.abs(lo-CENTRO[1])<.2)return[la,lo]}}catch(e){}return null}
 async function garanteGeo(nomes){const falta=nomes.filter(n=>!geo[n]);
- for(const n of falta){const c=await geocodifica(n);if(c){geo[n]=c;await sb.from("bairros_geo").upsert({nome:n,lat:c[0],lng:c[1]})}await new Promise(r=>setTimeout(r,1100))}}
+ for(const n of falta){const c=await geocodifica(n);if(c){geo[n]=c;await sb.from("bairros_geo").upsert({nome:n,lat:c[0],lng:c[1]});render()}else{naoAchou.add(n)}await new Promise(r=>setTimeout(r,1100))}}
 const km=(a,b)=>{const R=6371,x=(b[0]-a[0])*Math.PI/180,y=(b[1]-a[1])*Math.PI/180,h=Math.sin(x/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(y/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
 const proximas=(c,n=3)=>unidades.map(u=>({...u,d:km(c,[u.lat,u.lng])})).sort((a,b)=>a.d-b.d).slice(0,n);
 
@@ -96,7 +97,7 @@ async function start(){
  $("login").classList.add("hidden");$("app").classList.remove("hidden");
  map=L.map("map").setView(CENTRO,13);
  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(map);
- heat=L.heatLayer([],{radius:45,blur:35,maxZoom:15,gradient:{.15:"#1e40af",.35:"#06b6d4",.5:"#22c55e",.65:"#facc15",.8:"#f97316",1:"#dc2626"}}).addTo(map);
+ heat=L.heatLayer([],{radius:55,blur:30,maxZoom:13,max:1,minOpacity:.45,gradient:{.15:"#1e40af",.35:"#06b6d4",.5:"#22c55e",.65:"#facc15",.8:"#f97316",1:"#dc2626"}}).addTo(map);
  marks=L.layerGroup().addTo(map);
  setTimeout(()=>map.invalidateSize(),300);addEventListener("resize",()=>map.invalidateSize());
  if(location.protocol==="file:"){$("live").textContent="⚠ Abra pelo site: hepamap.github.io/app.html";}
@@ -123,6 +124,8 @@ function render(){
  const d=db.filter(r=>!lim||new Date(r.criado_em)>=lim),G={};
  d.forEach(r=>{const x=G[r.bairro]=G[r.bairro]||{b:r.bairro,n:0,pontos:0,sint:0,comS:0,vac:0,rs:[]};x.n++;x.pontos+=r.pontos||0;x.sint+=(r.sintomas||[]).length;if((r.sintomas||[]).length)x.comS++;if(r.vacina==="Sim")x.vac++;x.rs.push(r)});
  grupos=Object.values(G).filter(x=>x.n>=min).sort((a,b)=>b[met]-a[met]);const mx=Math.max(1,...grupos.map(x=>x[met]));
+ const semGeo=grupos.filter(x=>!geo[x.b]).map(x=>x.b);
+ $("geoinfo").textContent=semGeo.length?(semGeo.filter(b=>!naoAchou.has(b)).length?`⏳ Localizando no mapa: ${semGeo.filter(b=>!naoAchou.has(b)).join(", ")}. `:"")+(semGeo.some(b=>naoAchou.has(b))?`⚠ Não encontrado no mapa: ${semGeo.filter(b=>naoAchou.has(b)).join(", ")}`:""):"";
  heat.setLatLngs(grupos.filter(x=>geo[x.b]).map(x=>[...geo[x.b],x[met]/mx]));
  marks.clearLayers();grupos.forEach(x=>{if(!geo[x.b])return;const f=x[met]/mx;
   L.circleMarker(geo[x.b],{radius:7+f*10,color:"#fff",weight:2,fillColor:cor(f),fillOpacity:.95}).bindTooltip(`${esc(x.b)} — ${x.n} resp.`).on("click",()=>detalhe(x.b)).addTo(marks)});
