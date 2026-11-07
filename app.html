@@ -5,7 +5,6 @@
 <title>HepaMap — App dos Agentes de Saúde</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--navy:#0b2540;--teal:#1aa6a6;--gray:#6b7785;--bg:#f2f4f6;--bd:#dde2e7}
@@ -46,7 +45,7 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
  </div>
  <div class="grid" id="kpis"></div>
  <div class="lay" style="margin-top:14px">
-  <div class="card"><h2>Mapa de focos — escala do azul (menos atenção) ao vermelho (mais atenção)</h2><div id="map"></div>
+  <div class="card"><h2>Mapa de focos por bairro — azul (menos atenção) → vermelho (mais atenção)</h2><div id="map"></div>
    <p class="note" id="geoinfo"></p><p class="note">Clique num bairro para ver detalhes e as unidades de saúde mais próximas. Posição do bairro e unidades: OpenStreetMap.</p></div>
   <div class="card" id="painel"><h2>Bairro selecionado</h2><p class="note">Clique num bairro no mapa ou na tabela.</p></div>
  </div>
@@ -63,10 +62,10 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
 const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ";
 const CENTRO = [-21.7946, -48.1756];
-const VERSAO = "2026-11-07.3"; // o Claude muda isto a cada atualização do app
+const VERSAO = "2026-11-07.4"; // o Claude muda isto a cada atualização do app
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY), $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const naoAchou=new Set();let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
+const naoAchou=new Set();let camada=null,valores={},maxV=1;let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
 
 $("bl").onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: $("em").value, password: $("pw").value });
   $("le").textContent = error ? "Falha no login: " + error.message : ""; if (!error) start(); };
@@ -96,27 +95,32 @@ const proximas=(c,n=3)=>unidades.map(u=>({...u,d:km(c,[u.lat,u.lng])})).sort((a,
 async function start(){
  $("login").classList.add("hidden");$("app").classList.remove("hidden");
  map=L.map("map").setView(CENTRO,13);
- L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(map);
- heat=L.heatLayer([],{radius:55,blur:30,maxZoom:13,max:1,minOpacity:.45,gradient:{.15:"#1e40af",.35:"#06b6d4",.5:"#22c55e",.65:"#facc15",.8:"#f97316",1:"#dc2626"}}).addTo(map);
+ L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution:"Esri, HERE, Garmin, © OpenStreetMap"}).addTo(map);
+ L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,pane:"shadowPane"}).addTo(map);
+ try{const fc=await (await fetch("bairros.geojson?v="+VERSAO)).json();
+  fc.features.forEach(f=>geo[f.properties.nome]=[f.properties.lat,f.properties.lng]);
+  camada=L.geoJSON(fc,{style:estilo,onEachFeature:(f,l)=>{l.on("click",()=>detalhe(f.properties.nome));l.bindTooltip(()=>{const x=grupos.find(g=>g.b===f.properties.nome);return esc(f.properties.nome)+(x?` — ${x.n} resposta(s)`:" — sem respostas")},{sticky:true})}}).addTo(map);
+  map.setView([-21.787,-48.172],13)}catch(e){console.warn("geojson",e)}
  marks=L.layerGroup().addTo(map);
  setTimeout(()=>map.invalidateSize(),300);addEventListener("resize",()=>map.invalidateSize());
  if(location.protocol==="file:"){$("live").textContent="⚠ Abra pelo site: hepamap.github.io/app.html";}
  const lg=L.control({position:"bottomright"});lg.onAdd=()=>{const d=L.DomUtil.create("div","legend");d.innerHTML='<b>Atenção</b><div class="grad"></div><div class="gl"><span>menor</span><span>maior</span></div>';return d};lg.addTo(map);
  const [{data,error},{data:g}]=await Promise.all([sb.from("respostas").select("*").order("criado_em",{ascending:false}).limit(20000),sb.from("bairros_geo").select("*")]);
  if(error){$("live").textContent="Erro: "+error.message;return}
- db=data;(g||[]).forEach(x=>geo[x.nome]=[x.lat,x.lng]);
+ db=data;
  render();carregaUnidades().then(render);
  verificaAtualizacoes();setInterval(verificaAtualizacoes,5*60*1000);
- garanteGeo([...new Set(db.map(r=>r.bairro))]).then(render);
  try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(e){}
- sb.channel("novas").on("postgres_changes",{event:"INSERT",schema:"public",table:"respostas"},async p=>{db.unshift(p.new);await garanteGeo([p.new.bairro]);render();avisar(p.new)})
+ sb.channel("novas").on("postgres_changes",{event:"INSERT",schema:"public",table:"respostas"},async p=>{db.unshift(p.new);render();avisar(p.new)})
   .subscribe(s=>$("live").textContent=s==="SUBSCRIBED"?"● ao vivo":"○ "+s);
 }
 function avisar(r){const t=`Nova resposta: ${r.bairro}`;$("toast").textContent=t;$("toast").classList.add("on");setTimeout(()=>$("toast").classList.remove("on"),5000);
  try{if(Notification.permission==="granted")new Notification("HepaMap",{body:t})}catch(e){}}
 
 // ---------- cálculo e desenho ----------
-const cor=f=>["#1e40af","#06b6d4","#22c55e","#facc15","#f97316","#dc2626"][Math.min(5,Math.floor(f*6))];
+function estilo(f){const v=valores[f.properties.nome];
+ return v?{color:"#ffffff",weight:1.2,dashArray:"3 4",fillColor:cor(v/maxV),fillOpacity:.6}:{color:"#ffffff",weight:1,dashArray:"2 5",opacity:.55,fillOpacity:0}}
+const cor=f=>["#1e40af","#06b6d4","#22c55e","#facc15","#f97316","#dc2626"][Math.min(5,Math.floor(f*5.999))];
 const bars=m=>{const e=Object.entries(m).sort((a,b)=>b[1]-a[1]),mx=e.length?e[0][1]:1;return e.map(([k,v])=>`<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(k)}</span><span>${v}</span></div><div class="bar" style="width:${v/mx*100}%"></div></div>`).join("")||'<p class="note">Sem dados</p>'};
 let grupos=[];
 function render(){
@@ -124,11 +128,10 @@ function render(){
  const d=db.filter(r=>!lim||new Date(r.criado_em)>=lim),G={};
  d.forEach(r=>{const x=G[r.bairro]=G[r.bairro]||{b:r.bairro,n:0,pontos:0,sint:0,comS:0,vac:0,rs:[]};x.n++;x.pontos+=r.pontos||0;x.sint+=(r.sintomas||[]).length;if((r.sintomas||[]).length)x.comS++;if(r.vacina==="Sim")x.vac++;x.rs.push(r)});
  grupos=Object.values(G).filter(x=>x.n>=min).sort((a,b)=>b[met]-a[met]);const mx=Math.max(1,...grupos.map(x=>x[met]));
- const semGeo=grupos.filter(x=>!geo[x.b]).map(x=>x.b);
- $("geoinfo").textContent=semGeo.length?(semGeo.filter(b=>!naoAchou.has(b)).length?`⏳ Localizando no mapa: ${semGeo.filter(b=>!naoAchou.has(b)).join(", ")}. `:"")+(semGeo.some(b=>naoAchou.has(b))?`⚠ Não encontrado no mapa: ${semGeo.filter(b=>naoAchou.has(b)).join(", ")}`:""):"";
- heat.setLatLngs(grupos.filter(x=>geo[x.b]).map(x=>[...geo[x.b],x[met]/mx]));
- marks.clearLayers();grupos.forEach(x=>{if(!geo[x.b])return;const f=x[met]/mx;
-  L.circleMarker(geo[x.b],{radius:7+f*10,color:"#fff",weight:2,fillColor:cor(f),fillOpacity:.95}).bindTooltip(`${esc(x.b)} — ${x.n} resp.`).on("click",()=>detalhe(x.b)).addTo(marks)});
+ valores={};grupos.forEach(x=>valores[x.b]=x[met]);maxV=Math.max(1,...grupos.map(x=>x[met]));
+ if(camada)camada.setStyle(estilo);
+ const fora=grupos.filter(x=>!geo[x.b]).map(x=>x.b);
+ $("geoinfo").textContent=fora.length?`Fora do mapa (sem área definida): ${fora.join(", ")}`:"";
  $("rk").innerHTML=grupos.map(x=>{const f=x[met]/mx,u=geo[x.b]&&unidades.length?proximas(geo[x.b],1)[0]:null;
   return `<tr class="r" onclick="detalhe('${esc(x.b).replace(/'/g,"\\'")}')"><td><span class="dot" style="background:${cor(f)}"></span>${esc(x.b)}</td><td>${x.n}</td><td>${x.pontos}</td><td>${x.comS}</td><td>${Math.round(x.vac/x.n*100)}%</td><td>${u?`${esc(u.nome)} (${u.d.toFixed(1)} km)`:(geo[x.b]?"carregando…":"localizando bairro…")}</td></tr>`}).join("")
   ||`<tr><td colspan=6 class="note">Nenhum bairro com ${min}+ respostas no período.</td></tr>`;
