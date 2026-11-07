@@ -63,7 +63,7 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
 const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ";
 const CENTRO = [-21.7946, -48.1756];
-const VERSAO = "2026-11-07.1"; // o Claude muda isto a cada atualização do app
+const VERSAO = "2026-11-07.2"; // o Claude muda isto a cada atualização do app
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY), $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
@@ -98,6 +98,8 @@ async function start(){
  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(map);
  heat=L.heatLayer([],{radius:45,blur:35,maxZoom:15,gradient:{.15:"#1e40af",.35:"#06b6d4",.5:"#22c55e",.65:"#facc15",.8:"#f97316",1:"#dc2626"}}).addTo(map);
  marks=L.layerGroup().addTo(map);
+ setTimeout(()=>map.invalidateSize(),300);addEventListener("resize",()=>map.invalidateSize());
+ if(location.protocol==="file:"){$("live").textContent="⚠ Abra pelo site: hepamap.github.io/app.html";}
  const lg=L.control({position:"bottomright"});lg.onAdd=()=>{const d=L.DomUtil.create("div","legend");d.innerHTML='<b>Atenção</b><div class="grad"></div><div class="gl"><span>menor</span><span>maior</span></div>';return d};lg.addTo(map);
  const [{data,error},{data:g}]=await Promise.all([sb.from("respostas").select("*").order("criado_em",{ascending:false}).limit(20000),sb.from("bairros_geo").select("*")]);
  if(error){$("live").textContent="Erro: "+error.message;return}
