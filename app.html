@@ -37,6 +37,7 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
  <label>E-mail</label><input id="em" type="email"><label>Senha</label><input id="pw" type="password">
  <button class="btn" id="bl">Entrar</button><div id="le" class="err"></div>
 </div>
+<div id="upd" class="card hidden" style="border-left:5px solid #f97316;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span id="updt"></span><button class="btn" id="updb" style="margin:0">Atualizar</button></div>
 <div id="app" class="hidden">
  <div class="card grid">
   <div><label>Período</label><select id="fp"><option value="0">Tudo</option><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></div>
@@ -62,6 +63,7 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
 const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ";
 const CENTRO = [-21.7946, -48.1756];
+const VERSAO = "2026-11-07.1"; // o Claude muda isto a cada atualização do app
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY), $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
@@ -101,6 +103,7 @@ async function start(){
  if(error){$("live").textContent="Erro: "+error.message;return}
  db=data;(g||[]).forEach(x=>geo[x.nome]=[x.lat,x.lng]);
  render();carregaUnidades().then(render);
+ verificaAtualizacoes();setInterval(verificaAtualizacoes,5*60*1000);
  garanteGeo([...new Set(db.map(r=>r.bairro))]).then(render);
  try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(e){}
  sb.channel("novas").on("postgres_changes",{event:"INSERT",schema:"public",table:"respostas"},async p=>{db.unshift(p.new);await garanteGeo([p.new.bairro]);render();avisar(p.new)})
@@ -141,6 +144,21 @@ window.detalhe=b=>{const x=grupos.find(g=>g.b===b);if(!x)return;const c=geo[b];i
  <h2 style="margin-top:14px">Unidades de saúde mais próximas</h2>${un.length?`<ul>${un.map(u=>`<li><b>${esc(u.nome)}</b> — ${u.d.toFixed(1)} km${u.end?`<br><span class="note">${esc(u.end)}</span>`:""}</li>`).join("")}</ul>`:'<p class="note">Carregando unidades…</p>'}
  <p class="note">Sugestão de ação: mutirão de teste rápido e atualização vacinal nessas unidades.</p>`};
 ["fp","fm","fmin"].forEach(i=>$(i).onchange=render);
+// ---------- atualizações (código pelo GitHub + banco pelo botão) ----------
+let pendentes=[],novoApp=false;
+async function verificaAtualizacoes(){try{
+ const v=await (await fetch("version.json?t="+Date.now(),{cache:"no-store"})).json();novoApp=v.versao!==VERSAO;
+ pendentes=[];const {data:adm}=await sb.rpc("hm_sou_admin");
+ if(adm){const lista=await (await fetch("migrations/index.json?t="+Date.now(),{cache:"no-store"})).json();
+  const {data:feitas}=await sb.from("hm_migracoes").select("id");const ok=new Set((feitas||[]).map(x=>x.id));pendentes=lista.filter(id=>!ok.has(id))}
+ const msg=[];if(pendentes.length)msg.push(`🛠 ${pendentes.length} atualização(ões) de banco`);if(novoApp)msg.push("✨ nova versão do app");
+ $("updt").textContent=msg.length?"Atualização disponível: "+msg.join(" e "):"";$("upd").classList.toggle("hidden",!msg.length);$("upd").style.display=msg.length?"flex":"none";
+}catch(e){console.warn("update",e)}}
+$("updb").onclick=async()=>{const b=$("updb");b.disabled=true;
+ try{for(const id of pendentes){b.textContent="Aplicando "+id+"…";const sql=await (await fetch("migrations/"+id+".sql?t="+Date.now(),{cache:"no-store"})).text();
+  const {error}=await sb.rpc("hm_aplicar",{p_id:id,p_sql:sql});if(error)throw new Error(id+": "+error.message)}
+  b.textContent="Recarregando…";location.replace(location.pathname+"?v="+Date.now())}
+ catch(e){$("updt").textContent="Erro na atualização — "+e.message;b.disabled=false;b.textContent="Tentar de novo"}};
 </script>
 </body>
 </html>
