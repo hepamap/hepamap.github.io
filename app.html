@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HepaMap — App dos Agentes de Saúde</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#0b2540;--teal:#1aa6a6;--gray:#6b7785;--bg:#f2f4f6;--bd:#dde2e7}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:#14181d}
+header{background:var(--navy);color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px}header h1 span{color:var(--teal)}#live{font-size:12px;opacity:.9}
+main{max-width:1200px;margin:0 auto;padding:14px}.card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;color:var(--navy)}label{font-size:12px;color:var(--gray);display:block;margin:6px 0 4px}
+input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px;font-size:14px}
+.btn{background:var(--navy);color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.lay{display:grid;grid-template-columns:2fr 1fr;gap:14px}@media(max-width:900px){.lay{grid-template-columns:1fr}}
+#map{height:560px;border-radius:10px}
+.kpi{background:#fff;border:1px solid var(--bd);border-left:4px solid var(--teal);border-radius:10px;padding:12px}.kpi b{font-size:24px;display:block;color:var(--navy)}.kpi span{font-size:12px;color:var(--gray)}
+.legend{background:#fff;padding:8px 10px;border-radius:8px;font-size:12px;box-shadow:0 1px 4px #0003}
+.grad{width:180px;height:10px;border-radius:5px;background:linear-gradient(90deg,#1e40af,#06b6d4,#22c55e,#facc15,#f97316,#dc2626)}
+.gl{display:flex;justify-content:space-between}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--bd)}th{font-size:11px;color:var(--gray);font-weight:500}
+tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.bar{height:8px;background:var(--teal);border-radius:4px}.hidden{display:none}.err{color:#c0392b;font-size:13px}.note{font-size:12px;color:var(--gray)}
+#painel ul{padding-left:18px;margin:6px 0}#toast{position:fixed;right:16px;bottom:16px;background:var(--navy);color:#fff;padding:12px 16px;border-radius:10px;border-left:4px solid var(--teal);opacity:0;transition:.3s;z-index:2000}#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header><h1>Hepa<span>Map</span> · Araraquara/SP</h1><div id="live"></div></header>
+<main>
+<div id="login" class="card" style="max-width:380px;margin:40px auto">
+ <h2>Acesso dos agentes de saúde</h2>
+ <label>E-mail</label><input id="em" type="email"><label>Senha</label><input id="pw" type="password">
+ <button class="btn" id="bl">Entrar</button><div id="le" class="err"></div>
+</div>
+<div id="app" class="hidden">
+ <div class="card grid">
+  <div><label>Período</label><select id="fp"><option value="0">Tudo</option><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></div>
+  <div><label>Intensidade do mapa por</label><select id="fm"><option value="pontos">Pontuação de risco</option><option value="n">Nº de respostas</option><option value="sint">Nº de sintomas relatados</option></select></div>
+  <div><label>Mínimo de respostas para mostrar o bairro</label><select id="fmin"><option>1</option><option selected>3</option><option>5</option></select></div>
+ </div>
+ <div class="grid" id="kpis"></div>
+ <div class="lay" style="margin-top:14px">
+  <div class="card"><h2>Mapa de focos — escala do azul (menos atenção) ao vermelho (mais atenção)</h2><div id="map"></div>
+   <p class="note">Clique num bairro para ver detalhes e as unidades de saúde mais próximas. Posição do bairro e unidades: OpenStreetMap.</p></div>
+  <div class="card" id="painel"><h2>Bairro selecionado</h2><p class="note">Clique num bairro no mapa ou na tabela.</p></div>
+ </div>
+ <div class="card"><h2>Ranking de bairros</h2><table><thead><tr><th>Bairro</th><th>Respostas</th><th>Pontuação</th><th>Com sintomas</th><th>Vacina em dia</th><th>Unidade mais próxima</th></tr></thead><tbody id="rk"></tbody></table></div>
+ <div class="grid">
+  <div class="card"><h2>Sintomas relatados</h2><div id="ts"></div></div>
+  <div class="card"><h2>Fatores de risco (respostas "Sim")</h2><div id="tr"></div></div>
+  <div class="card"><h2>Faixa etária</h2><div id="tf"></div></div>
+ </div>
+</div>
+</main>
+<div id="toast"></div>
+<script>
+const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
+const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ";
+const CENTRO = [-21.7946, -48.1756];
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY), $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
+
+$("bl").onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: $("em").value, password: $("pw").value });
+  $("le").textContent = error ? "Falha no login: " + error.message : ""; if (!error) start(); };
+sb.auth.getSession().then(({ data }) => data.session && start());
+
+// ---------- dados externos (OpenStreetMap) ----------
+async function overpass(q){const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});return (await r.json()).elements}
+const AREA='area["name"="Araraquara"]["admin_level"="8"]->.a;';
+async function carregaUnidades(){try{const c=JSON.parse(localStorage.getItem("hm_unid")||"null");if(c&&Date.now()-c.t<7*864e5){unidades=c.u;return}}catch(e){}
+ try{const el=await overpass('[out:json][timeout:30];'+AREA+'(nwr["amenity"~"clinic|hospital|doctors"](area.a);nwr["healthcare"~"clinic|hospital|centre|doctor"](area.a););out center tags;');
+  unidades=el.map(e=>({nome:e.tags.name,lat:e.lat??e.center?.lat,lng:e.lon??e.center?.lon,tipo:e.tags.healthcare||e.tags.amenity,end:[e.tags["addr:street"],e.tags["addr:housenumber"]].filter(Boolean).join(", ")}))
+   .filter(u=>u.nome&&u.lat).filter(u=>/ubs|usf|cms|unidade|sa[uú]de|esf|ambulat|pronto|upa|hospital|centro|posto|caps|cemi/i.test(u.nome));
+  try{localStorage.setItem("hm_unid",JSON.stringify({t:Date.now(),u:unidades}))}catch(e){}}catch(e){console.warn(e)}}
+async function locais(){if(osmPlaces)return osmPlaces;try{const el=await overpass('[out:json][timeout:25];'+AREA+'(node["place"~"suburb|neighbourhood|quarter"](area.a);way["place"~"suburb|neighbourhood|quarter"](area.a);relation["place"~"suburb|neighbourhood|quarter"](area.a););out center tags;');
+ osmPlaces={};el.forEach(e=>{const n=e.tags?.name,la=e.lat??e.center?.lat,lo=e.lon??e.center?.lon;if(n&&la)osmPlaces[chave(n)]=[la,lo]})}catch(e){osmPlaces={}}return osmPlaces}
+const chave=s=>String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/^(jardim|jd\.?|vila|vl\.?|parque|pq\.?|residencial|res\.?|conjunto|cj\.?)\s+/,"").trim();
+async function geocodifica(nome){const p=await locais();if(p[chave(nome)])return p[chave(nome)];
+ try{const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(nome+", Araraquara, SP, Brasil"));const j=await r.json();
+  if(j.length){const la=+j[0].lat,lo=+j[0].lon;if(Math.abs(la-CENTRO[0])<.2&&Math.abs(lo-CENTRO[1])<.2)return[la,lo]}}catch(e){}return null}
+async function garanteGeo(nomes){const falta=nomes.filter(n=>!geo[n]);
+ for(const n of falta){const c=await geocodifica(n);if(c){geo[n]=c;await sb.from("bairros_geo").upsert({nome:n,lat:c[0],lng:c[1]})}await new Promise(r=>setTimeout(r,1100))}}
+const km=(a,b)=>{const R=6371,x=(b[0]-a[0])*Math.PI/180,y=(b[1]-a[1])*Math.PI/180,h=Math.sin(x/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(y/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
+const proximas=(c,n=3)=>unidades.map(u=>({...u,d:km(c,[u.lat,u.lng])})).sort((a,b)=>a.d-b.d).slice(0,n);
+
+// ---------- início ----------
+async function start(){
+ $("login").classList.add("hidden");$("app").classList.remove("hidden");
+ map=L.map("map").setView(CENTRO,13);
+ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(map);
+ heat=L.heatLayer([],{radius:45,blur:35,maxZoom:15,gradient:{.15:"#1e40af",.35:"#06b6d4",.5:"#22c55e",.65:"#facc15",.8:"#f97316",1:"#dc2626"}}).addTo(map);
+ marks=L.layerGroup().addTo(map);
+ const lg=L.control({position:"bottomright"});lg.onAdd=()=>{const d=L.DomUtil.create("div","legend");d.innerHTML='<b>Atenção</b><div class="grad"></div><div class="gl"><span>menor</span><span>maior</span></div>';return d};lg.addTo(map);
+ const [{data,error},{data:g}]=await Promise.all([sb.from("respostas").select("*").order("criado_em",{ascending:false}).limit(20000),sb.from("bairros_geo").select("*")]);
+ if(error){$("live").textContent="Erro: "+error.message;return}
+ db=data;(g||[]).forEach(x=>geo[x.nome]=[x.lat,x.lng]);
+ render();carregaUnidades().then(render);
+ garanteGeo([...new Set(db.map(r=>r.bairro))]).then(render);
+ try{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission()}catch(e){}
+ sb.channel("novas").on("postgres_changes",{event:"INSERT",schema:"public",table:"respostas"},async p=>{db.unshift(p.new);await garanteGeo([p.new.bairro]);render();avisar(p.new)})
+  .subscribe(s=>$("live").textContent=s==="SUBSCRIBED"?"● ao vivo":"○ "+s);
+}
+function avisar(r){const t=`Nova resposta: ${r.bairro}`;$("toast").textContent=t;$("toast").classList.add("on");setTimeout(()=>$("toast").classList.remove("on"),5000);
+ try{if(Notification.permission==="granted")new Notification("HepaMap",{body:t})}catch(e){}}
+
+// ---------- cálculo e desenho ----------
+const cor=f=>["#1e40af","#06b6d4","#22c55e","#facc15","#f97316","#dc2626"][Math.min(5,Math.floor(f*6))];
+const bars=m=>{const e=Object.entries(m).sort((a,b)=>b[1]-a[1]),mx=e.length?e[0][1]:1;return e.map(([k,v])=>`<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(k)}</span><span>${v}</span></div><div class="bar" style="width:${v/mx*100}%"></div></div>`).join("")||'<p class="note">Sem dados</p>'};
+let grupos=[];
+function render(){
+ const p=+$("fp").value,lim=p?Date.now()-p*864e5:0,min=+$("fmin").value,met=$("fm").value;
+ const d=db.filter(r=>!lim||new Date(r.criado_em)>=lim),G={};
+ d.forEach(r=>{const x=G[r.bairro]=G[r.bairro]||{b:r.bairro,n:0,pontos:0,sint:0,comS:0,vac:0,rs:[]};x.n++;x.pontos+=r.pontos||0;x.sint+=(r.sintomas||[]).length;if((r.sintomas||[]).length)x.comS++;if(r.vacina==="Sim")x.vac++;x.rs.push(r)});
+ grupos=Object.values(G).filter(x=>x.n>=min).sort((a,b)=>b[met]-a[met]);const mx=Math.max(1,...grupos.map(x=>x[met]));
+ heat.setLatLngs(grupos.filter(x=>geo[x.b]).map(x=>[...geo[x.b],x[met]/mx]));
+ marks.clearLayers();grupos.forEach(x=>{if(!geo[x.b])return;const f=x[met]/mx;
+  L.circleMarker(geo[x.b],{radius:7+f*10,color:"#fff",weight:2,fillColor:cor(f),fillOpacity:.95}).bindTooltip(`${esc(x.b)} — ${x.n} resp.`).on("click",()=>detalhe(x.b)).addTo(marks)});
+ $("rk").innerHTML=grupos.map(x=>{const f=x[met]/mx,u=geo[x.b]&&unidades.length?proximas(geo[x.b],1)[0]:null;
+  return `<tr class="r" onclick="detalhe('${esc(x.b).replace(/'/g,"\\'")}')"><td><span class="dot" style="background:${cor(f)}"></span>${esc(x.b)}</td><td>${x.n}</td><td>${x.pontos}</td><td>${x.comS}</td><td>${Math.round(x.vac/x.n*100)}%</td><td>${u?`${esc(u.nome)} (${u.d.toFixed(1)} km)`:(geo[x.b]?"carregando…":"localizando bairro…")}</td></tr>`}).join("")
+  ||`<tr><td colspan=6 class="note">Nenhum bairro com ${min}+ respostas no período.</td></tr>`;
+ const sim=k=>d.filter(r=>r[k]==="Sim").length;
+ $("kpis").innerHTML=[[d.length,"Respostas no período"],[grupos.length,"Bairros no mapa"],[d.filter(r=>(r.sintomas||[]).length).length,"Relataram sintomas"],[sim("contato"),"Contato com alguém com sintomas"],[d.filter(r=>r.vacina!=="Sim").length,"Vacina não em dia / não sabe"],[d.filter(r=>r.exame!=="Sim").length,"Nunca fizeram exame / não sabem"]]
+  .map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join("");
+ const ts={},tf={};d.forEach(r=>{(r.sintomas||[]).forEach(s=>ts[s]=(ts[s]||0)+1);if(r.faixa)tf[r.faixa]=(tf[r.faixa]||0)+1});
+ $("ts").innerHTML=bars(ts);$("tf").innerHTML=bars(tf);
+ $("tr").innerHTML=bars({"Sexo sem proteção":sim("sexo_sem_protecao"),"Seringa compartilhada":sim("seringa"),"Objeto cortante compartilhado":sim("objeto_cortante"),"Contato com alguém com sintomas":sim("contato")});
+}
+window.detalhe=b=>{const x=grupos.find(g=>g.b===b);if(!x)return;const c=geo[b];if(c)map.setView(c,15);
+ const cnt=k=>x.rs.filter(r=>r[k]==="Sim").length,ss={};x.rs.forEach(r=>(r.sintomas||[]).forEach(s=>ss[s]=(ss[s]||0)+1));
+ const un=c&&unidades.length?proximas(c,3):[];
+ $("painel").innerHTML=`<h2>${esc(b)}</h2><div class="grid"><div class="kpi"><b>${x.n}</b><span>respostas</span></div><div class="kpi"><b>${x.pontos}</b><span>pontuação</span></div></div>
+ <p><b>Fatores:</b> sexo sem proteção ${cnt("sexo_sem_protecao")} · seringa ${cnt("seringa")} · objeto cortante ${cnt("objeto_cortante")} · contato ${cnt("contato")}</p>
+ <p><b>Vacina em dia:</b> ${cnt("vacina")} de ${x.n} · <b>Já fizeram exame:</b> ${cnt("exame")} de ${x.n}</p>
+ <b>Sintomas mais relatados</b>${bars(ss)}
+ <h2 style="margin-top:14px">Unidades de saúde mais próximas</h2>${un.length?`<ul>${un.map(u=>`<li><b>${esc(u.nome)}</b> — ${u.d.toFixed(1)} km${u.end?`<br><span class="note">${esc(u.end)}</span>`:""}</li>`).join("")}</ul>`:'<p class="note">Carregando unidades…</p>'}
+ <p class="note">Sugestão de ação: mutirão de teste rápido e atualização vacinal nessas unidades.</p>`};
+["fp","fm","fmin"].forEach(i=>$(i).onchange=render);
+</script>
+</body>
+</html>

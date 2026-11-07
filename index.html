@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HepaMap — Questionário anônimo</title>
+<style>
+:root{--navy:#0b2540;--teal:#1aa6a6;--gray:#6b7785;--bg:#f2f4f6;--bd:#dde2e7}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:#14181d}
+header{background:var(--navy);color:#fff;padding:20px 18px 26px;border-bottom:5px solid var(--teal)}
+header small{color:#7fd6d6;letter-spacing:.15em;font-weight:700;font-size:11px}header h1{margin:6px 0 4px;font-size:22px}header p{margin:0;opacity:.85;font-size:14px}
+main{max-width:560px;margin:-14px auto 30px;padding:0 14px}
+.aviso{background:#fff;border:1px solid var(--bd);border-left:5px solid var(--teal);border-radius:12px;padding:14px 16px;margin-bottom:12px;font-size:14px;line-height:1.45}
+.aviso p{margin:0 0 8px}.aviso p:last-child{margin:0}
+.q{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:16px;margin:0 0 12px}
+.q .t{font-weight:600;font-size:15px;display:block;margin-bottom:10px;color:var(--navy)}
+.q .h{font-size:12px;color:var(--gray);margin:-6px 0 10px}
+input[type=text],select{width:100%;padding:12px;border:1px solid var(--bd);border-radius:8px;font-size:16px;background:#fff}
+.op{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--bd);border-radius:8px;margin:6px 0;font-size:15px;cursor:pointer}
+.op input{width:20px;height:20px;accent-color:var(--teal);flex:none}
+.req{color:#c0392b}.hidden{display:none}
+button{width:100%;padding:15px;border:0;border-radius:10px;background:var(--navy);color:#fff;font-size:17px;font-weight:600}
+button:disabled{opacity:.6}
+.priv{font-size:12px;color:var(--gray);text-align:center;margin:12px 0}
+#fim{display:none;text-align:center;background:#fff;border-radius:12px;padding:30px 18px;border:1px solid var(--bd)}
+#fim h2{color:var(--navy)}.err{color:#c0392b;font-size:14px;margin-top:8px;text-align:center}
+.logos{display:flex;gap:8px;justify-content:center;margin:18px 0 0}.logos img{height:44px;background:#fff;border-radius:6px;padding:3px}
+</style>
+</head>
+<body>
+<header><small>ARARAQUARA/SP · HEPATITES VIRAIS</small><h1>Questionário anônimo</h1><p>Leva cerca de 2 minutos. Não pedimos nome, CPF, telefone nem e-mail.</p></header>
+<main>
+<div class="aviso">
+ <p>O formulário abaixo é destinado apenas à coleta de dados anônimos para o rastreamento de Hepatites Virais.</p>
+ <p>O documento não traz um diagnóstico ou tratamento.</p>
+ <p><b>Procure sempre a unidade de saúde mais próxima de você caso apresente algum sinal, sintoma ou contato com alguma das situações listadas no formulário.</b></p>
+</div>
+<form id="f" novalidate></form>
+<div id="fim"><h2>Obrigado! ✅</h2><p>Sua resposta foi enviada de forma anônima.</p><p>Se você tem algum sinal, sintoma ou passou por alguma das situações do formulário, <b>procure a unidade de saúde mais próxima</b>. O teste rápido e a vacina contra a hepatite B são gratuitos pelo SUS.</p></div>
+<div class="logos"><img src="logos/uniara.gif" alt="Uniara"><img src="logos/enfermagem.png" alt="Enfermagem"></div>
+</main>
+<script>
+// ===================== CONFIGURAÇÃO =====================
+const SUPABASE_URL = "https://rxxjubcwgwgawtbksdwe.supabase.co";
+const SUPABASE_KEY = "sb_publishable_BtexuzUrlWIoOTQyyd2WWA_KIsynmQZ"; // pública: só permite ENVIAR
+// Sintomas na ordem da página de Hepatite B do Ministério da Saúde (gov.br/saude)
+const SINTOMAS = ["Cansaço","Tontura","Enjoo e/ou vômitos","Febre","Dor abdominal","Urina escura e fezes claras","Pele e olhos amarelados"];
+const SNI = ["Sim","Não","Prefiro não responder"];
+// ===================== PERGUNTAS =====================
+// tipo: bairro | lista | unica | multipla  ·  campo: coluna no banco  ·  se: só aparece se outra pergunta tiver o valor
+const PERGUNTAS = [
+ {campo:"bairro", tipo:"bairro", titulo:"Em qual bairro de Araraquara você mora?", obrig:true, dica:"Comece a digitar e escolha na lista"},
+ {campo:"faixa", tipo:"lista", titulo:"Faixa etária", obrig:true, opcoes:["Menos de 18 anos","18 a 29 anos","30 a 39 anos","40 a 49 anos","50 a 59 anos","60 anos ou mais"]},
+ {campo:"sexo", tipo:"unica", titulo:"Sexo", obrig:true, opcoes:["Feminino","Masculino","Prefiro não responder"]},
+ {campo:"sexo_sem_protecao", tipo:"unica", titulo:"Já realizou sexo sem proteção?", obrig:true, opcoes:SNI},
+ {campo:"seringa", tipo:"unica", titulo:"Já fez o uso de seringas compartilhadas?", obrig:true, opcoes:SNI},
+ {campo:"objeto_cortante", tipo:"unica", titulo:"Já fez o uso de qualquer objeto cortante de maneira compartilhada?", dica:"Alicates de unha, escovas de dente ou lâminas de barbear", obrig:true, opcoes:SNI},
+ {campo:"sintomas", tipo:"multipla", titulo:"Marque um ou mais sintomas que você apresentou", dica:"Pode marcar mais de uma opção", opcoes:[...SINTOMAS,"Nenhum desses"]},
+ {campo:"contato", tipo:"unica", titulo:"Teve contato com alguém com algum dos sintomas citados anteriormente?", obrig:true, opcoes:["Sim","Não","Não sei"]},
+ {campo:"sintomas_contato", tipo:"multipla", se:["contato","Sim"], titulo:"Se sim, quais sintomas essa pessoa apresentava?", dica:"Pode marcar mais de uma opção", opcoes:[...SINTOMAS,"Não sei"]},
+ {campo:"exame", tipo:"unica", titulo:"Já realizou algum exame de hepatite?", obrig:true, opcoes:["Sim","Não","Não sei"]},
+ {campo:"vacina", tipo:"unica", titulo:"Sua carteira de vacinação está em dia?", obrig:true, opcoes:["Sim","Não","Não sei"]}
+];
+// Pontos usados só para priorizar bairros no app dos agentes
+const PESO_SINT = {"Cansaço":1,"Tontura":1,"Enjoo e/ou vômitos":1,"Febre":1,"Dor abdominal":1,"Urina escura e fezes claras":2,"Pele e olhos amarelados":3};
+function pontuar(d){let p=0;
+ (d.sintomas||[]).forEach(s=>p+=PESO_SINT[s]||0);
+ (d.sintomas_contato||[]).forEach(s=>p+=PESO_SINT[s]||0);
+ if(d.sexo_sem_protecao==="Sim")p+=2; if(d.seringa==="Sim")p+=3; if(d.objeto_cortante==="Sim")p+=2;
+ if(d.contato==="Sim")p+=2; if(d.exame==="Não")p+=1; if(d.vacina==="Não")p+=2; else if(d.vacina==="Não sei")p+=1;
+ return p}
+// =====================================================
+const f=document.getElementById("f"),esc=s=>String(s).replace(/"/g,"&quot;");
+f.innerHTML=PERGUNTAS.map((p,i)=>{const r=p.obrig?' <span class="req">*</span>':'',h=p.dica?`<div class="h">${p.dica}</div>`:'',cl=p.se?' hidden':'';
+ const ini=`<div class="q${cl}" id="q_${p.campo}"><span class="t">${p.titulo}${r}</span>${h}`;
+ if(p.tipo==="bairro")return ini+`<input type="text" name="bairro" list="lb" maxlength="60" autocomplete="off" aria-label="${esc(p.titulo)}"><datalist id="lb"></datalist></div>`;
+ if(p.tipo==="lista")return ini+`<select name="${p.campo}" aria-label="${esc(p.titulo)}"><option value="">Selecione</option>${p.opcoes.map(o=>`<option>${o}</option>`).join("")}</select></div>`;
+ const t=p.tipo==="unica"?"radio":"checkbox";
+ return ini+p.opcoes.map(o=>`<label class="op"><input type="${t}" name="${p.campo}" value="${esc(o)}">${o}</label>`).join("")+`</div>`;
+}).join("")+`<button id="b">Enviar resposta</button><div id="e" class="err"></div><p class="priv">🔒 Anônimo. Quem responde não vê respostas de outras pessoas. Os dados vão apenas para a equipe de saúde do projeto.</p>`;
+// mostra/esconde perguntas condicionais
+f.addEventListener("change",ev=>{
+ PERGUNTAS.filter(p=>p.se).forEach(p=>{const v=(new FormData(f)).get(p.se[0]);document.getElementById("q_"+p.campo).classList.toggle("hidden",v!==p.se[1])});
+ // "Nenhum desses"/"Não sei" desmarcam as outras opções
+ const x=ev.target;if(x.type==="checkbox"){const g=[...f.querySelectorAll(`input[name="${x.name}"]`)],excl=["Nenhum desses","Não sei"];
+  if(x.checked&&excl.includes(x.value))g.forEach(c=>{if(c!==x)c.checked=false});else if(x.checked)g.forEach(c=>{if(excl.includes(c.value))c.checked=false})}
+});
+// lista de bairros de Araraquara (OpenStreetMap); se falhar, a pessoa digita livre
+(async()=>{try{let L=JSON.parse(localStorage.getItem("hm_bairros")||"null");
+ if(!L){const q='[out:json][timeout:25];area["name"="Araraquara"]["admin_level"="8"]->.a;(node["place"~"suburb|neighbourhood|quarter"](area.a);way["place"~"suburb|neighbourhood|quarter"](area.a);relation["place"~"suburb|neighbourhood|quarter"](area.a););out tags;';
+  const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});
+  L=[...new Set((await r.json()).elements.map(e=>e.tags&&e.tags.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
+  try{localStorage.setItem("hm_bairros",JSON.stringify(L))}catch(e){}}
+ document.getElementById("lb").innerHTML=L.map(n=>`<option value="${esc(n)}">`).join("")}catch(e){}})();
+const norm=s=>s.trim().replace(/\s+/g," ").toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
+f.onsubmit=async ev=>{ev.preventDefault();const d={cidade:"Araraquara"},fd=new FormData(f),e=document.getElementById("e");
+ for(const p of PERGUNTAS){if(p.se&&fd.get(p.se[0])!==p.se[1])continue;
+  const v=p.tipo==="multipla"?fd.getAll(p.campo):(fd.get(p.campo)||"").trim();
+  if(p.obrig&&(!v||!v.length)){e.textContent="Responda: "+p.titulo;document.getElementById("q_"+p.campo).scrollIntoView({behavior:"smooth",block:"center"});return}
+  d[p.campo]=p.tipo==="bairro"?norm(v):p.tipo==="multipla"?v.filter(x=>x!=="Nenhum desses"&&x!=="Não sei"):(v||null)}
+ d.pontos=pontuar(d);
+ const b=document.getElementById("b");b.disabled=true;b.textContent="Enviando…";e.textContent="";
+ try{const r=await fetch(SUPABASE_URL+"/rest/v1/respostas",{method:"POST",headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(d)});
+  if(!r.ok)throw new Error(r.status);f.style.display="none";document.querySelector(".aviso").style.display="none";document.getElementById("fim").style.display="block";scrollTo(0,0)}
+ catch(x){e.textContent="Não foi possível enviar. Verifique a internet e tente de novo.";b.disabled=false;b.textContent="Enviar resposta"}};
+</script>
+</body>
+</html>
