@@ -29,7 +29,7 @@ revoke all on function public.hm_aplicar(text, text) from public, anon;
 grant execute on function public.hm_aplicar(text, text) to authenticated;
 grant execute on function public.hm_sou_admin() to authenticated;
 
--- Torna administrador o usuário com este e-mail (troque se o seu login for outro).
+-- Torna administrador o usuário com este e-mail (troque pelo e-mail de login criado no Supabase).
 insert into public.hm_admins(user_id)
-select id from auth.users where email = 'thekingtiago4@gmail.com'
+select id from auth.users where email = 'SEU-EMAIL-DE-LOGIN@exemplo.com'
 on conflict do nothing;
