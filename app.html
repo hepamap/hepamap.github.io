@@ -62,13 +62,18 @@ tr.r{cursor:pointer}tr.r:hover{background:#f5f8fa}.dot{display:inline-block;widt
 const SUPABASE_URL = "https://lubydyippnbdytowysiy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_IHihfCwxDlJ1wlx06IpgeQ_PFxosEcz";
 const CENTRO = [-21.7946, -48.1756];
-const VERSAO = "2026-11-25.1"; // o Claude muda isto a cada atualização do app
+const VERSAO = "2026-11-25.2"; // o Claude muda isto a cada atualização do app
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY), $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const naoAchou=new Set();let camada=null,valores={},maxV=1;let db = [], geo = {}, unidades = [], map, heat, marks, osmPlaces = null;
 
-$("bl").onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: $("em").value, password: $("pw").value });
-  $("le").textContent = error ? "Falha no login: " + error.message : ""; if (!error) start(); };
+async function entrar(){const b=$("bl");b.disabled=true;b.textContent="Entrando…";$("le").textContent="";
+ try{const { error } = await sb.auth.signInWithPassword({ email: $("em").value.trim(), password: $("pw").value });
+  if(error){$("le").textContent=error.message==="Invalid login credentials"?"E-mail ou senha incorretos.":"Falha no login: "+error.message;return}
+  await start()}
+ catch(e){$("le").textContent="Não foi possível conectar ao servidor. Verifique a internet ou se o projeto do Supabase está ativo. ("+(e.message||e)+")"}
+ finally{b.disabled=false;b.textContent="Entrar"}}
+$("bl").onclick=entrar;["em","pw"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();entrar()}}));
 sb.auth.getSession().then(({ data }) => data.session && start());
 
 // ---------- dados externos (OpenStreetMap) ----------
